@@ -47,7 +47,7 @@ if not df.empty:
         "Categoria/Produto", 
         get_opts('CATEGORIA/PRODUTO'), 
         default=get_opts('CATEGORIA/PRODUTO')
-    
+    )
     # Filtragem dos dados
     df_f = df[
         (df['ANO_BI'].isin(f_ano)) & 
