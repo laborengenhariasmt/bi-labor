@@ -74,5 +74,3 @@ if not df.empty:
     st.dataframe(df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'VALOR ANUAL', 'STATUS']], use_container_width=True, hide_index=True)
 else:
     st.warning("Sem dados.")
-else:
-    st.warning("Conectando ao banco de dados...")
