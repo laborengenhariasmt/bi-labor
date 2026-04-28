@@ -47,25 +47,24 @@ if not df.empty:
     # Filtragem dos dados
     df_f = df[(df['ANO_BI'].isin(f_ano)) & (df['MES_BI'].isin(f_mes)) & (df['STATUS_FINAL'].isin(f_status))]
 
-    # --- BLOCO CORRIGIDO ---
-    total_visto = df_f['VALOR_NUM'].sum()
+    # --- BLOCO DE CÁLCULO CORRIGIDO ---
+    # 1. Total de tudo que está aparecendo conforme os filtros (Total em Tela)
+    total_em_tela = df_f['VALOR_NUM'].sum()
         
-    # Soma quem contém "APROVAD"
-    aprovadas = df_f[df_f['STATUS'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
+    # 2. Total apenas das propostas APROVADAS (Total Aprovado)
+    # Filtramos por quem contém "APROVAD" para evitar erros de espaço ou gênero (O/A)
+    valor_aprovado = df_f[df_f['STATUS_FINAL'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
         
-    # Soma quem contém "APRESENTAD"
-    apresentadas = df_f[df_f['STATUS'].str.contains('APRESENTAD', na=False)]['VALOR_NUM'].sum()
-        
-    base_final = aprovadas + apresentadas
-    taxa_real = (aprovadas / base_final * 100) if base_final > 0 else 0
+    # 3. A CONTA QUE VOCÊ PEDIU: Total Aprovado / Total em Tela
+    taxa_final = (valor_aprovado / total_em_tela * 100) if total_em_tela > 0 else 0
 
-    # --- EXIBIÇÃO (MÉTRICAS) ---
+    # --- EXIBIÇÃO NOS CARTÕES ---
     st.title("📊 BI Comercial - Labor")
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total em Tela", f"R$ {total_visto:,.2f}")
-    c2.metric("Total Aprovado", f"R$ {aprovadas:,.2f}")
-    c3.metric("% Conversão", f"{taxa_real:.1f}%")
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Total em Tela", f"R$ {total_em_tela:,.2f}")
+    col_b.metric("Total Aprovado", f"R$ {valor_aprovado:,.2f}")
+    col_c.metric("% Conversão (Aprov/Tela)", f"{taxa_final:.1f}%")
     # -----------------------
 
     st.divider()
