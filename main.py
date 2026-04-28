@@ -43,9 +43,18 @@ if not df.empty:
     f_ano = st.sidebar.multiselect("Ano", get_opts('ANO_BI'), default=get_opts('ANO_BI'))
     f_mes = st.sidebar.multiselect("Mês", get_opts('MES_BI'), default=get_opts('MES_BI'))
     f_status = st.sidebar.multiselect("Status", get_opts('STATUS_FINAL'), default=get_opts('STATUS_FINAL'))
-
+    f_categoria = st.sidebar.multiselect(
+        "Categoria/Produto", 
+        get_opts('CATEGORIA/PRODUTO'), 
+        default=get_opts('CATEGORIA/PRODUTO')
+    
     # Filtragem dos dados
-    df_f = df[(df['ANO_BI'].isin(f_ano)) & (df['MES_BI'].isin(f_mes)) & (df['STATUS_FINAL'].isin(f_status))]
+    df_f = df[
+        (df['ANO_BI'].isin(f_ano)) & 
+        (df['MES_BI'].isin(f_mes)) & 
+        (df['STATUS_FINAL'].isin(f_status)) &
+        (df['CATEGORIA/PRODUTO'].isin(f_categoria)) # Nova linha
+    ]
 
     # --- BLOCO DE CÁLCULO CORRIGIDO ---
     # 1. Total de tudo que está aparecendo conforme os filtros (Total em Tela)
@@ -71,7 +80,11 @@ if not df.empty:
         col_b.metric("Total Aprovado", f"R$ {valor_aprovado:,.2f}")
         col_c.metric("% Conversão (Aprov/Tela)", f"{taxa_final:.1f}%")
         st.divider()
-        st.dataframe(df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'VALOR ANUAL', 'STATUS']], use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'CATEGORIA/PRODUTO', 'VALOR ANUAL', 'STATUS']], 
+            use_container_width=True, 
+            hide_index=True
+        )
 
     with aba_indicadores:
         st.subheader("🏆 Maiores Oportunidades (Top 10)")
