@@ -47,26 +47,26 @@ if not df.empty:
     # Filtragem dos dados
     df_f = df[(df['ANO_BI'].isin(f_ano)) & (df['MES_BI'].isin(f_mes)) & (df['STATUS_FINAL'].isin(f_status))]
 
-    # --- TROQUE APENAS ESTE BLOCO ---
+    # --- BLOCO CORRIGIDO ---
     total_visto = df_f['VALOR_NUM'].sum()
         
-    # Soma quem contém "APROVAD" (pega Aprovada, Aprovado, com ou sem espaço)
+    # Soma quem contém "APROVAD"
     aprovadas = df_f[df_f['STATUS'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
         
     # Soma quem contém "APRESENTAD"
     apresentadas = df_f[df_f['STATUS'].str.contains('APRESENTAD', na=False)]['VALOR_NUM'].sum()
         
-    base_conv = aprovadas + apresentadas
-    tx = (aprovadas / base_calc * 100) if base_calc > 0 else 0
-    # -------------------------------
+    base_final = aprovadas + apresentadas
+    taxa_real = (aprovadas / base_final * 100) if base_final > 0 else 0
 
-    # --- EXIBIÇÃO ---
+    # --- EXIBIÇÃO (MÉTRICAS) ---
     st.title("📊 BI Comercial - Labor")
     
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total em Tela", f"R$ {total_em_tela:,.2f}")
-    c2.metric("Total Aprovado", f"R$ {v_aprovada:,.2f}")
-    c3.metric("% Conversão", f"{percentual:.1f}%")
+    c1.metric("Total em Tela", f"R$ {total_visto:,.2f}")
+    c2.metric("Total Aprovado", f"R$ {aprovadas:,.2f}")
+    c3.metric("% Conversão", f"{taxa_real:.1f}%")
+    # -----------------------
 
     st.divider()
     st.dataframe(df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'VALOR ANUAL', 'STATUS']], use_container_width=True, hide_index=True)
