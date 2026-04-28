@@ -47,18 +47,18 @@ if not df.empty:
     # Filtragem dos dados
     df_f = df[(df['ANO_BI'].isin(f_ano)) & (df['MES_BI'].isin(f_mes)) & (df['STATUS_FINAL'].isin(f_status))]
 
-    # --- CÁLCULOS REAIS ---
-    total_em_tela = df_f['VALOR_NUM'].sum()
-    
-    # Soma APENAS quem é APROVADA (limpo)
-    v_aprovada = df_f[df_f['STATUS_FINAL'] == 'APROVADA']['VALOR_NUM'].sum()
-    
-    # Soma APENAS quem é APRESENTADO (limpo)
-    v_apresentado = df_f[df_f['STATUS_FINAL'] == 'APRESENTADO']['VALOR_NUM'].sum()
-    
-    # Base de conversão = Aprovada + Apresentado
-    base = v_aprovada + v_apresentado
-    percentual = (v_aprovada / base * 100) if base > 0 else 0
+    # --- TROQUE APENAS ESTE BLOCO ---
+    total_visto = df_f['VALOR_NUM'].sum()
+        
+    # Soma quem contém "APROVAD" (pega Aprovada, Aprovado, com ou sem espaço)
+    aprovadas = df_f[df_f['STATUS'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
+        
+    # Soma quem contém "APRESENTAD"
+    apresentadas = df_f[df_f['STATUS'].str.contains('APRESENTAD', na=False)]['VALOR_NUM'].sum()
+        
+    base_conv = aprovadas + apresentadas
+    tx = (aprovadas / base_calc * 100) if base_calc > 0 else 0
+    # -------------------------------
 
     # --- EXIBIÇÃO ---
     st.title("📊 BI Comercial - Labor")
