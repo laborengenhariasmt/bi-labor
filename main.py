@@ -16,10 +16,6 @@ URL_PROPOSTAS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?forma
 URL_COMISSOES = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=8362953"
 
 
-    if not isinstance(txt, str): return str(txt)
-    txt = unicodedata.normalize('NFD', txt).encode('ascii', 'ignore').decode('utf-8')
-    return txt.strip().upper().replace(" ", "_").replace("/", "_")
-
 @st.cache_data(ttl=2)
 def load_data(url):
     try:
