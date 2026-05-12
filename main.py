@@ -29,7 +29,7 @@ def clean_num(x):
 
 # --- CARGA DOS DADOS ---
 df_propostas_raw = load_data(URL_PROPOSTAS)
-df_com_raw = load_data(URL_COMISSOES)
+df_com_raw = load_data ("https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pubhtml?gid=8362953&single=true")
 
 st.title("📊 BI Comercial & Comissões - Labor")
 
