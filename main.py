@@ -6,9 +6,9 @@ import io
 # 1. Configuração de tela
 st.set_page_config(page_title="BI Labor", layout="wide")
 
-# URLs das abas do Google Sheets (Publicadas como CSV)
+# URLs CORRETAS (Configuradas para exportação de dados CSV)
 URL_PROPOSTAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=240265302&single=true&output=csv"
-URL_COMISSOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=1543319084&single=true&output=csv"
+URL_COMISSOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=8362953&single=true&output=csv"
 
 @st.cache_data(ttl=2)
 def load_data(url):
@@ -27,13 +27,13 @@ def clean_num(x):
     try: return float(v)
     except: return 0.0
 
-# --- CARGA DOS DADOS ---
+# --- CARGA DOS DADOS (CORRIGIDA) ---
 df_propostas_raw = load_data(URL_PROPOSTAS)
-df_com_raw = load_data ("https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pubhtml?gid=8362953&single=true")
+df_com_raw = load_data(URL_COMISSOES)
 
 st.title("📊 BI Comercial & Comissões - Labor")
 
-# --- PROCESSAMENTO PROPOSTAS ---
+# --- PROCESSAMENTO PROPOSTAS (NÃO RESUMIDO) ---
 if not df_propostas_raw.empty:
     df_p = df_propostas_raw.copy()
     
@@ -102,28 +102,20 @@ if not df_propostas_raw.empty:
         if not df_com_raw.empty:
             df_c = df_com_raw.copy()
             
-            # --- BLINDAGEM CONTRA KEYERROR 'EMPRESA NOVA' ---
-            # Se a coluna não existir exatamente, tentamos encontrar uma similar ou criamos vazia
+            # --- IDENTIFICAÇÃO DE COLUNAS ---
             col_empresa_nova = 'EMPRESA NOVA'
             if col_empresa_nova not in df_c.columns:
-                # Procura por colunas que contenham 'EMPRESA' e 'NOVA'
                 similares = [c for c in df_c.columns if 'EMPRESA' in c and 'NOVA' in c]
-                if similares:
-                    col_empresa_nova = similares[0]
-                else:
-                    df_c['EMPRESA NOVA'] = 'NÃO' # Cria coluna padrão para evitar quebra
-                    col_empresa_nova = 'EMPRESA NOVA'
+                col_empresa_nova = similares[0] if similares else 'EMPRESA NOVA'
+                if col_empresa_nova not in df_c.columns: df_c[col_empresa_nova] = 'NÃO'
 
-            # Limpeza de valores recebidos
             col_valor_rec = 'VALOR RECEBIDO' if 'VALOR RECEBIDO' in df_c.columns else df_c.columns[0]
             df_c['VALOR_REC_NUM'] = df_c[col_valor_rec].apply(clean_num)
             
-            # Tratamento de Data do Recebimento
             col_data_rec = 'DATA DO RECEBIMENTO' if 'DATA DO RECEBIMENTO' in df_c.columns else df_c.columns[0]
             df_c['DATA_REC'] = pd.to_datetime(df_c[col_data_rec], errors='coerce')
             df_c['MES_REF_COM'] = df_c['DATA_REC'].dt.strftime('%m/%Y')
             
-            # Limpeza do critério Empresa Nova
             df_c['EMPRESA_NOVA_LIMPO'] = df_c[col_empresa_nova].astype(str).str.strip().str.upper()
 
             # Regra: SIM = 8% | NÃO = 4%
@@ -142,11 +134,9 @@ if not df_propostas_raw.empty:
                 st.metric(f"Total Comissão em {mes_pago_sel}", f"R$ {total_com_mes:,.2f}")
 
                 st.markdown("### Detalhamento Analítico de Comissões")
-                # Definimos as colunas que queremos mostrar com base no que existe
                 exibir = [c for c in [col_data_rec, 'EMPRESA', col_valor_rec, col_empresa_nova, 'VALOR_COMISSAO'] if c in df_mes_pago.columns or c == 'VALOR_COMISSAO']
                 st.dataframe(df_mes_pago[exibir], use_container_width=True, hide_index=True)
 
-                # Exportação Excel
                 col_ex1, col_ex2 = st.columns(2)
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -158,10 +148,10 @@ if not df_propostas_raw.empty:
                     file_name=f"Comissoes_Labor_{mes_pago_sel.replace('/','_')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-                col_ex2.info("Dica: Para PDF, use Ctrl+P no navegador.")
+                col_ex2.info("Para PDF, use Ctrl+P no navegador.")
             else:
-                st.warning("Verifique se a coluna de 'DATA DO RECEBIMENTO' está preenchida corretamente no Sheets.")
+                st.warning("Verifique se as datas de recebimento estão preenchidas no Sheets.")
         else:
-            st.warning("Dados de comissões não carregados. Verifique o link da aba 'COMISSÕES'.")
+            st.warning("Dados de comissões não carregados.")
 else:
-    st.error("Falha ao carregar a aba PROPOSTAS. Verifique o link no GitHub.")
+    st.error("Falha ao carregar a aba PROPOSTAS.")
