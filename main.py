@@ -106,7 +106,7 @@ if not df_propostas_raw.empty:
 
             if c_data and c_valor:
                 df_c['VALOR_REC_NUM'] = df_c[c_valor].apply(clean_num)
-                df_c['DATA_REC'] = pd.to_datetime(df_c[c_data], errors='coerce')
+                df_c['DATA_REC'] = pd.to_datetime(df_c[c_data], errors='coerce', dayfirst=True)
                 df_c['MES_REF'] = df_c['DATA_REC'].dt.strftime('%m/%Y')
                 
                 status_nova = df_c[c_nova].str.upper().str.strip() if c_nova else "NAO"
