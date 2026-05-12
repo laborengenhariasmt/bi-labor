@@ -1,118 +1,122 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
+import io
 
 st.set_page_config(page_title="BI Labor", layout="wide")
 
-SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=240265302&single=true&output=csv"
+# URLs das abas do Google Sheets (Publicadas como CSV individualmente)
+URL_PROPOSTAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=240265302&single=true&output=csv"
+# O usuário deve publicar a aba 'comissões' como CSV e colocar a URL aqui:
+URL_COMISSOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=1543319084&single=true&output=csv"
 
 @st.cache_data(ttl=2)
-def load_data():
+def load_data(url):
     try:
-        df = pd.read_csv(SHEET_URL, dtype=str)
+        df = pd.read_csv(url, dtype=str)
         df.columns = df.columns.str.strip().str.upper()
         return df.dropna(how='all')
     except Exception as e:
-        st.error(f"Erro: {e}")
         return pd.DataFrame()
 
-df = load_data()
+def clean_num(x):
+    if pd.isna(x): return 0.0
+    v = str(x).replace('R$', '').replace('.', '').replace(',', '.').replace(' ', '').strip()
+    try: return float(v)
+    except: return 0.0
 
-if not df.empty:
-    # 1. Garantia de colunas de tempo
-    if 'ANO_BI' not in df.columns:
-        df['DATA_AUX'] = pd.to_datetime(df['MÊS'], errors='coerce')
-        df['ANO_BI'] = df['DATA_AUX'].dt.year.fillna(0).astype(int).astype(str)
-        df['MES_BI'] = df['DATA_AUX'].dt.month.fillna(0).astype(int).astype(str)
+# --- CARGA ---
+df_propostas = load_data(https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pubhtml?gid=240265302&single=true)
+df_com_raw = load_data(https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pubhtml?gid=8362953&single=true)
 
-    # 2. Limpeza de Valores (Crucial para o cálculo bater)
-    def clean_num(x):
-        if pd.isna(x): return 0.0
-        v = str(x).replace('R$', '').replace('.', '').replace(',', '.').strip()
-        try: return float(v)
-        except: return 0.0
+st.title("📊 BI Comercial & Comissões - Labor")
 
-    df['VALOR_NUM'] = df['VALOR ANUAL'].apply(clean_num)
+# Abas do Sistema
+aba_geral, aba_indicadores, aba_comissoes = st.tabs(["📊 Visão Geral", "🚀 Performance", "💰 Comissões"])
+
+# --- PROCESSAMENTO PROPOSTAS ---
+if not df_propostas.empty:
+    df_propostas['VALOR_NUM'] = df_propostas['VALOR ANUAL'].apply(clean_num)
+    df_propostas['STATUS_FINAL'] = df_propostas['STATUS'].astype(str).str.strip().str.upper()
     
-    # 3. Limpeza de Status (Removendo espaços invisíveis que causam o erro de 100%)
-    df['STATUS_FINAL'] = df['STATUS'].astype(str).str.strip().str.upper()
+    # Datas Propostas
+    df_propostas['DATA_AUX'] = pd.to_datetime(df_propostas['MÊS'], errors='coerce')
+    df_propostas['ANO_BI'] = df_propostas['DATA_AUX'].dt.year.fillna(0).astype(int).astype(str)
+    df_propostas['MES_BI'] = df_propostas['DATA_AUX'].dt.month.fillna(0).astype(int).astype(str)
 
-    # --- FILTROS ---
-    st.sidebar.title("Filtros")
-    def get_opts(c): return sorted([str(x) for x in df[c].unique() if str(x) not in ['nan','0','']])
+    # Filtros Laterais
+    st.sidebar.title("Filtros Gerais")
+    def get_opts(df, c): return sorted([str(x) for x in df[c].unique() if str(x) not in ['nan','0','']])
     
-    f_ano = st.sidebar.multiselect("Ano", get_opts('ANO_BI'), default=get_opts('ANO_BI'))
-    f_mes = st.sidebar.multiselect("Mês", get_opts('MES_BI'), default=get_opts('MES_BI'))
-    f_status = st.sidebar.multiselect("Status", get_opts('STATUS_FINAL'), default=get_opts('STATUS_FINAL'))
-    f_categoria = st.sidebar.multiselect(
-        "Categoria/Produto", 
-        get_opts('CATEGORIA/PRODUTO'), 
-        default=get_opts('CATEGORIA/PRODUTO')
-    )
-    # Filtragem dos dados
-    df_f = df[
-        (df['ANO_BI'].isin(f_ano)) & 
-        (df['MES_BI'].isin(f_mes)) & 
-        (df['STATUS_FINAL'].isin(f_status)) &
-        (df['CATEGORIA/PRODUTO'].isin(f_categoria)) # Nova linha
-    ]
-
-    # --- BLOCO DE CÁLCULO CORRIGIDO ---
-    # 1. Total de tudo que está aparecendo conforme os filtros (Total em Tela)
-    total_em_tela = df_f['VALOR_NUM'].sum()
-        
-    # 2. Total apenas das propostas APROVADAS (Total Aprovado)
-    # Filtramos por quem contém "APROVAD" para evitar erros de espaço ou gênero (O/A)
-    valor_aprovado = df_f[df_f['STATUS_FINAL'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
-        
-    # 3. A CONTA QUE VOCÊ PEDIU: Total Aprovado / Total em Tela
-    taxa_final = (valor_aprovado / total_em_tela * 100) if total_em_tela > 0 else 0
-
-    # --- EXIBIÇÃO NOS CARTÕES ---
-    st.title("📊 BI Comercial - Labor")
+    f_ano = st.sidebar.multiselect("Ano", get_opts(df_propostas, 'ANO_BI'), default=get_opts(df_propostas, 'ANO_BI'))
+    f_mes = st.sidebar.multiselect("Mês", get_opts(df_propostas, 'MES_BI'), default=get_opts(df_propostas, 'MES_BI'))
     
-    # --- CRIAÇÃO DAS ABAS ---
-    aba_geral, aba_indicadores = st.tabs(["📊 Visão Geral", "🚀 Indicadores & Performance"])
+    df_f = df_propostas[(df_propostas['ANO_BI'].isin(f_ano)) & (df_propostas['MES_BI'].isin(f_mes))]
 
     with aba_geral:
-        # AQUI VOCÊ MANTÉM OS 3 CARTÕES (KPIs) QUE JÁ CRIAMOS
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Total em Tela", f"R$ {total_em_tela:,.2f}")
-        col_b.metric("Total Aprovado", f"R$ {valor_aprovado:,.2f}")
-        col_c.metric("% Conversão (Aprov/Tela)", f"{taxa_final:.1f}%")
+        total_em_tela = df_f['VALOR_NUM'].sum()
+        valor_aprovado = df_f[df_f['STATUS_FINAL'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
+        taxa_final = (valor_aprovado / total_em_tela * 100) if total_em_tela > 0 else 0
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total em Tela", f"R$ {total_em_tela:,.2f}")
+        c2.metric("Total Aprovado", f"R$ {valor_aprovado:,.2f}")
+        c3.metric("% Conversão", f"{taxa_final:.1f}%")
         st.divider()
-        st.dataframe(
-            df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'CATEGORIA/PRODUTO', 'VALOR ANUAL', 'STATUS']], 
-            use_container_width=True, 
-            hide_index=True
-        )
+        st.dataframe(df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'CATEGORIA/PRODUTO', 'VALOR ANUAL', 'STATUS']], use_container_width=True)
 
     with aba_indicadores:
-        st.subheader("🏆 Maiores Oportunidades (Top 10)")
-        # Ordena as maiores propostas
-        top_propostas = df_f.sort_values(by='VALOR_NUM', ascending=False).head(10)
+        st.subheader("Maiores Oportunidades")
+        st.bar_chart(df_f.sort_values('VALOR_NUM', ascending=False).head(10), x="EMPRESA", y="VALOR_NUM")
+
+# --- ABA COMISSÕES (O SEU PEDIDO NOVO) ---
+with aba_comissoes:
+    if not df_com_raw.empty:
+        # 1. Tratamento de Dados
+        # Espera colunas: 'EMPRESA', 'VALOR RECEBIDO', 'DATA DO RECEBIMENTO', 'EMPRESA NOVA'
+        df_c = df_com_raw.copy()
+        df_c['VALOR_REC_NUM'] = df_c['VALOR RECEBIDO'].apply(clean_num)
+        df_c['DATA_REC'] = pd.to_datetime(df_c['DATA DO RECEBIMENTO'], errors='coerce')
+        df_c['MES_REF'] = df_c['DATA_REC'].dt.strftime('%m/%Y')
+        df_c['EMPRESA_NOVA'] = df_c['EMPRESA NOVA'].astype(str).str.strip().str.upper()
+
+        # 2. Critério de Cálculo
+        # Empresa Nova (SIM) = 8% | Não = 4%
+        def calc_comissao(row):
+            percentual = 0.08 if row['EMPRESA_NOVA'] == 'SIM' else 0.04
+            return row['VALOR_REC_NUM'] * percentual
+
+        df_c['VALOR_COMISSAO'] = df_c.apply(calc_comissao, axis=1)
+
+        # 3. Filtro de Mês para Analítico
+        meses_disponiveis = sorted(df_c['MES_REF'].dropna().unique())
+        mes_sel = st.selectbox("Selecione o Mês para Pagamento", meses_disponiveis)
+
+        df_mes_pago = df_c[df_c['MES_REF'] == mes_sel]
+
+        # 4. Resumo Mensal
+        total_mes = df_mes_pago['VALOR_COMISSAO'].sum()
+        st.metric(f"Total Comissão - {mes_sel}", f"R$ {total_mes:,.2f}")
+
+        # 5. Lista Analítica
+        st.markdown("### Detalhamento Analítico")
+        exibir_cols = ['DATA DO RECEBIMENTO', 'EMPRESA', 'VALOR RECEBIDO', 'EMPRESA NOVA', 'VALOR_COMISSAO']
+        st.dataframe(df_mes_pago[exibir_cols], use_container_width=True, hide_index=True)
+
+        # 6. Exportação
+        col_ex1, col_ex2 = st.columns(2)
         
-        # Gráfico de Barras Horizontal para as maiores propostas
-        st.bar_chart(top_propostas, x="EMPRESA", y="VALOR_NUM", color="#004A99")
-
-        col_ind1, col_ind2 = st.columns(2)
+        # Exportar Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_mes_pago[exibir_cols].to_excel(writer, index=False, sheet_name='Comissoes')
+        col_ex1.download_button(
+            label="📥 Exportar para Excel",
+            data=output.getvalue(),
+            file_name=f"Comissoes_Labor_{mes_sel.replace('/','_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         
-        with col_ind1:
-            st.markdown("### 📈 Tendência Mensal")
-            # Agrupa por mês para ver a evolução
-            tendencia = df_f.groupby('MES_BI')['VALOR_NUM'].sum().reset_index()
-            st.line_chart(tendencia, x="MES_BI", y="VALOR_NUM")
-
-        with col_ind2:
-            st.markdown("### 🔍 Análise de Categoria")
-            # Sugestão Comercial: Qual produto mais vende?
-            if 'CATEGORIA/PRODUTO' in df_f.columns:
-                categoria = df_f.groupby('CATEGORIA/PRODUTO')['VALOR_NUM'].sum().sort_values(ascending=False)
-                st.write(categoria)
-
-        st.divider()
-        st.markdown("""
-        **💡 Sugestão do Treinador para o Comercial:**
-        1. **Foco no Top 10:** As empresas no gráfico de barras acima representam o seu maior potencial de receita.
-        2. **Gargalo de Status:** Se o 'Total em Tela' estiver muito maior que o 'Aprovado', verifique se as propostas estão travadas em 'Análise' por muito tempo.
-        3. **Sazonalidade:** Compare a 'Tendência Mensal' com o mesmo mês do ano anterior para prever quedas de demanda.
-        """)
+        col_ex2.info("Para salvar em PDF: Use o atalho Ctrl+P no seu navegador e selecione 'Salvar como PDF'.")
+    else:
+        st.warning("Aguardando dados da aba 'Comissões'. Certifique-se de que a coluna 'EMPRESA NOVA' (SIM/NÃO) e 'VALOR RECEBIDO' existem.")
