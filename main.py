@@ -14,12 +14,18 @@ URL_COMISSOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB
 def load_data(url):
     try:
         df = pd.read_csv(url, dtype=str)
-        # Limpeza agressiva: remove espaços e coloca tudo em MAIÚSCULO
+        # Limpa espaços vazios no início e fim dos nomes das colunas e dos dados
         df.columns = df.columns.str.strip().str.upper()
+        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
         return df.dropna(how='all')
     except Exception as e:
         st.error(f"Erro ao acessar os dados: {e}")
         return pd.DataFrame()
+
+# --- CARGA DOS DADOS ---
+# Certifique-se que o URL_COMISSOES termina com output=csv
+df_propostas_raw = load_data(URL_PROPOSTAS)
+df_com_raw = load_data(URL_COMISSOES)
 
 def clean_num(x):
     if pd.isna(x): return 0.0
