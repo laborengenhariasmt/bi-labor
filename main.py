@@ -3,9 +3,10 @@ import pandas as pd
 from datetime import datetime
 import io
 
+# 1. Configuração de tela
 st.set_page_config(page_title="BI Labor", layout="wide")
 
-# URLs CORRETAS (Sempre terminando em output=csv para o Python entender os dados)
+# URLs das abas do Google Sheets (Publicadas como CSV)
 URL_PROPOSTAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=240265302&single=true&output=csv"
 URL_COMISSOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQardvk5f0S9_dB41dMjd69GGVssEdPFx-pwd9u3lVtev-08iTKhz7b5uqL6lEX1bJ5BGQSpL9cSiNd/pub?gid=1543319084&single=true&output=csv"
 
@@ -16,6 +17,7 @@ def load_data(url):
         df.columns = df.columns.str.strip().str.upper()
         return df.dropna(how='all')
     except Exception as e:
+        st.error(f"Erro ao acessar os dados: {e}")
         return pd.DataFrame()
 
 def clean_num(x):
@@ -24,88 +26,121 @@ def clean_num(x):
     try: return float(v)
     except: return 0.0
 
-# --- CARGA (CORRIGIDA: Usando as variáveis definidas acima) ---
-df_propostas = load_data(URL_PROPOSTAS)
+# --- CARGA DOS DADOS ---
+df_propostas_raw = load_data(URL_PROPOSTAS)
 df_com_raw = load_data(URL_COMISSOES)
 
 st.title("📊 BI Comercial & Comissões - Labor")
 
-# Abas do Sistema
-aba_geral, aba_indicadores, aba_comissoes = st.tabs(["📊 Visão Geral", "🚀 Performance", "💰 Comissões"])
-
-# --- PROCESSAMENTO PROPOSTAS ---
-if not df_propostas.empty:
-    df_propostas['VALOR_NUM'] = df_propostas['VALOR ANUAL'].apply(clean_num)
-    df_propostas['STATUS_FINAL'] = df_propostas['STATUS'].astype(str).str.strip().str.upper()
+# --- PROCESSAMENTO PROPOSTAS (NÃO RESUMIDO) ---
+if not df_propostas_raw.empty:
+    df_p = df_propostas_raw.copy()
     
-    # Datas Propostas
-    df_propostas['DATA_AUX'] = pd.to_datetime(df_propostas['MÊS'], errors='coerce')
-    df_propostas['ANO_BI'] = df_propostas['DATA_AUX'].dt.year.fillna(0).astype(int).astype(str)
-    df_propostas['MES_BI'] = df_propostas['DATA_AUX'].dt.month.fillna(0).astype(int).astype(str)
+    # Garantia de colunas de tempo
+    if 'ANO_BI' not in df_p.columns:
+        df_p['DATA_AUX'] = pd.to_datetime(df_p['MÊS'], errors='coerce')
+        df_p['ANO_BI'] = df_p['DATA_AUX'].dt.year.fillna(0).astype(int).astype(str)
+        df_p['MES_BI'] = df_p['DATA_AUX'].dt.month.fillna(0).astype(int).astype(str)
+    
+    df_p['VALOR_NUM'] = df_p['VALOR ANUAL'].apply(clean_num)
+    df_p['STATUS_FINAL'] = df_p['STATUS'].astype(str).str.strip().str.upper()
 
-    # Filtros Laterais
+    # --- BARRA LATERAL (FILTROS COMPLETOS) ---
     st.sidebar.title("Filtros Gerais")
-    def get_opts(df_target, c): return sorted([str(x) for x in df_target[c].unique() if str(x) not in ['nan','0','']])
+    def get_opts(df_target, c): 
+        if c in df_target.columns:
+            return sorted([str(x) for x in df_target[c].unique() if str(x) not in ['nan','0','']])
+        return []
     
-    f_ano = st.sidebar.multiselect("Ano", get_opts(df_propostas, 'ANO_BI'), default=get_opts(df_propostas, 'ANO_BI'))
-    f_mes = st.sidebar.multiselect("Mês", get_opts(df_propostas, 'MES_BI'), default=get_opts(df_propostas, 'MES_BI'))
+    f_ano = st.sidebar.multiselect("Ano", get_opts(df_p, 'ANO_BI'), default=get_opts(df_p, 'ANO_BI'))
+    f_mes = st.sidebar.multiselect("Mês", get_opts(df_p, 'MES_BI'), default=get_opts(df_p, 'MES_BI'))
+    f_status = st.sidebar.multiselect("Status", get_opts(df_p, 'STATUS_FINAL'), default=get_opts(df_p, 'STATUS_FINAL'))
+    f_categoria = st.sidebar.multiselect("Categoria/Produto", get_opts(df_p, 'CATEGORIA/PRODUTO'), default=get_opts(df_p, 'CATEGORIA/PRODUTO'))
     
-    df_f = df_propostas[(df_propostas['ANO_BI'].isin(f_ano)) & (df_propostas['MES_BI'].isin(f_mes))]
+    # Filtragem Base
+    df_f = df_p[
+        (df_p['ANO_BI'].isin(f_ano)) & 
+        (df_p['MES_BI'].isin(f_mes)) & 
+        (df_p['STATUS_FINAL'].isin(f_status)) &
+        (df_p['CATEGORIA/PRODUTO'].isin(f_categoria))
+    ]
+
+    # --- CÁLCULOS TELA 1 ---
+    total_em_tela = df_f['VALOR_NUM'].sum()
+    valor_aprovado = df_f[df_f['STATUS_FINAL'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
+    taxa_final = (valor_aprovado / total_em_tela * 100) if total_em_tela > 0 else 0
+
+    # --- ABAS ---
+    aba_geral, aba_indicadores, aba_comissoes = st.tabs(["📊 Visão Geral", "🚀 Performance", "💰 Comissões"])
 
     with aba_geral:
-        total_em_tela = df_f['VALOR_NUM'].sum()
-        valor_aprovado = df_f[df_f['STATUS_FINAL'].str.contains('APROVAD', na=False)]['VALOR_NUM'].sum()
-        taxa_final = (valor_aprovado / total_em_tela * 100) if total_em_tela > 0 else 0
-        
         c1, c2, c3 = st.columns(3)
         c1.metric("Total em Tela", f"R$ {total_em_tela:,.2f}")
         c2.metric("Total Aprovado", f"R$ {valor_aprovado:,.2f}")
-        c3.metric("% Conversão", f"{taxa_final:.1f}%")
+        c3.metric("% Conversão (Aprov/Tela)", f"{taxa_final:.1f}%")
         st.divider()
         st.dataframe(df_f[['ANO_BI', 'MES_BI', 'EMPRESA', 'CATEGORIA/PRODUTO', 'VALOR ANUAL', 'STATUS']], use_container_width=True, hide_index=True)
 
     with aba_indicadores:
-        st.subheader("Maiores Oportunidades")
-        st.bar_chart(df_f.sort_values('VALOR_NUM', ascending=False).head(10), x="EMPRESA", y="VALOR_NUM")
+        st.subheader("🏆 Maiores Oportunidades (Top 10)")
+        top_propostas = df_f.sort_values(by='VALOR_NUM', ascending=False).head(10)
+        st.bar_chart(top_propostas, x="EMPRESA", y="VALOR_NUM", color="#004A99")
 
-# --- ABA COMISSÕES ---
-with aba_comissoes:
-    if not df_com_raw.empty:
-        df_c = df_com_raw.copy()
-        df_c['VALOR_REC_NUM'] = df_c['VALOR RECEBIDO'].apply(clean_num)
-        df_c['DATA_REC'] = pd.to_datetime(df_c['DATA DO RECEBIMENTO'], errors='coerce')
-        df_c['MES_REF'] = df_c['DATA_REC'].dt.strftime('%m/%Y')
-        df_c['EMPRESA_NOVA'] = df_c['EMPRESA NOVA'].astype(str).str.strip().str.upper()
+        col_ind1, col_ind2 = st.columns(2)
+        with col_ind1:
+            st.markdown("### 📈 Tendência Mensal")
+            tendencia = df_f.groupby('MES_BI')['VALOR_NUM'].sum().reset_index()
+            st.line_chart(tendencia, x="MES_BI", y="VALOR_NUM")
+        with col_ind2:
+            st.markdown("### 🔍 Análise de Categoria")
+            if 'CATEGORIA/PRODUTO' in df_f.columns:
+                cat_sum = df_f.groupby('CATEGORIA/PRODUTO')['VALOR_NUM'].sum().sort_values(ascending=False)
+                st.write(cat_sum)
 
-        def calc_comissao(row):
-            percentual = 0.08 if row['EMPRESA_NOVA'] == 'SIM' else 0.04
-            return row['VALOR_REC_NUM'] * percentual
+    with aba_comissoes:
+        if not df_com_raw.empty:
+            df_c = df_com_raw.copy()
+            # Limpeza de nomes de colunas específicas para comissão
+            df_c['VALOR_REC_NUM'] = df_c['VALOR RECEBIDO'].apply(clean_num)
+            df_c['DATA_REC'] = pd.to_datetime(df_c['DATA DO RECEBIMENTO'], errors='coerce')
+            df_c['MES_REF_COM'] = df_c['DATA_REC'].dt.strftime('%m/%Y')
+            df_c['EMPRESA_NOVA_LIMPO'] = df_c['EMPRESA NOVA'].astype(str).str.strip().str.upper()
 
-        df_c['VALOR_COMISSAO'] = df_c.apply(calc_comissao, axis=1)
+            # Regra: SIM = 8% | NÃO = 4%
+            def regra_comissao(row):
+                perc = 0.08 if row['EMPRESA_NOVA_LIMPO'] == 'SIM' else 0.04
+                return row['VALOR_REC_NUM'] * perc
 
-        meses_disponiveis = sorted(df_c['MES_REF'].dropna().unique())
-        if meses_disponiveis:
-            mes_sel = st.selectbox("Selecione o Mês para Pagamento", meses_disponiveis)
-            df_mes_pago = df_c[df_c['MES_REF'] == mes_sel]
+            df_c['VALOR_COMISSAO'] = df_c.apply(regra_comissao, axis=1)
 
-            total_mes = df_mes_pago['VALOR_COMISSAO'].sum()
-            st.metric(f"Total Comissão - {mes_sel}", f"R$ {total_mes:,.2f}")
+            meses_com = sorted(df_c['MES_REF_COM'].dropna().unique())
+            if meses_com:
+                mes_pago_sel = st.selectbox("Selecione o Mês do Recebimento", meses_com, key="sel_com")
+                df_mes_pago = df_c[df_c['MES_REF_COM'] == mes_pago_sel]
 
-            st.markdown("### Detalhamento Analítico")
-            exibir_cols = ['DATA DO RECEBIMENTO', 'EMPRESA', 'VALOR RECEBIDO', 'EMPRESA NOVA', 'VALOR_COMISSAO']
-            st.dataframe(df_mes_pago[exibir_cols], use_container_width=True, hide_index=True)
+                total_com_mes = df_mes_pago['VALOR_COMISSAO'].sum()
+                st.metric(f"Total Comissão em {mes_pago_sel}", f"R$ {total_com_mes:,.2f}")
 
-            col_ex1, col_ex2 = st.columns(2)
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_mes_pago[exibir_cols].to_excel(writer, index=False, sheet_name='Comissoes')
-            
-            col_ex1.download_button(
-                label="📥 Exportar para Excel",
-                data=output.getvalue(),
-                file_name=f"Comissoes_Labor_{mes_sel.replace('/','_')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            col_ex2.info("Para PDF: Use Ctrl+P no navegador.")
-    else:
-        st.warning("Aguardando dados da aba 'Comissões'. Verifique se a URL termina em 'output=csv'.")
+                st.markdown("### Detalhamento Analítico de Comissões")
+                cols_com = ['DATA DO RECEBIMENTO', 'EMPRESA', 'VALOR RECEBIDO', 'EMPRESA NOVA', 'VALOR_COMISSAO']
+                # Garante que as colunas existem antes de mostrar
+                cols_presentes = [c for c in cols_com if c in df_mes_pago.columns or c == 'VALOR_COMISSAO']
+                st.dataframe(df_mes_pago[cols_presentes], use_container_width=True, hide_index=True)
+
+                # Exportação
+                col_ex1, col_ex2 = st.columns(2)
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_mes_pago[cols_presentes].to_excel(writer, index=False, sheet_name='Comissoes')
+                
+                col_ex1.download_button(
+                    label="📥 Exportar Comissões para Excel",
+                    data=output.getvalue(),
+                    file_name=f"Comissoes_Labor_{mes_pago_sel.replace('/','_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                col_ex2.info("Dica: Para imprimir o analítico em PDF, use Ctrl+P no navegador.")
+        else:
+            st.warning("Dados de comissões não encontrados. Verifique a aba 'COMISSÕES' no Sheets.")
+else:
+    st.error("Falha ao carregar a aba PROPOSTAS. Verifique o link do Google Sheets.")
