@@ -130,6 +130,8 @@ def find_col(df, required_terms=None, optional_terms=None, forbidden_terms=None)
 def load_data(url):
     """Carrega CSV publicado/exportado do Google Sheets."""
     try:
+        # header=1 porque a primeira linha da planilha
+        # possui agrupadores visuais e não o cabeçalho real
         df = pd.read_csv(url, dtype=str, header=1)
 
         # Remove linhas totalmente vazias
