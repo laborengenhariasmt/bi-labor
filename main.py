@@ -130,7 +130,7 @@ def find_col(df, required_terms=None, optional_terms=None, forbidden_terms=None)
 def load_data(url):
     """Carrega CSV publicado/exportado do Google Sheets."""
     try:
-        df = pd.read_csv(url, dtype=str)
+        df = pd.read_csv(url, dtype=str, header=1)
 
         # Remove linhas totalmente vazias
         df = df.dropna(how="all")
