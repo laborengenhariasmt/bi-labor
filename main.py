@@ -177,15 +177,12 @@ def preparar_comissoes(df_raw):
     df["COMIS_8_NUM"] = df[c_com_8].apply(clean_num) if c_com_8 else 0.0
     df["COMIS_4_NUM"] = df[c_com_4].apply(clean_num) if c_com_4 else 0.0
 
-    if c_total:
-        df["COMIS_VAL"] = df[c_total].apply(clean_num)
-        df["COMIS_VAL"] = df.apply(lambda r: r["COMIS_8_NUM"] + r["COMIS_4_NUM"] if r["COMIS_VAL"] == 0 else r["COMIS_VAL"], axis=1)
-    elif c_com_8 or c_com_4:
-        df["COMIS_VAL"] = df["COMIS_8_NUM"] + df["COMIS_4_NUM"]
+    if c_com_8 or c_com_4:
+    df["COMIS_VAL"] = df["COMIS_8_NUM"] + df["COMIS_4_NUM"]
     else:
         df["PERC_COMISSAO"] = df["EMPRESA_NOVA_FLAG"].apply(lambda x: 0.08 if x == "SIM" else 0.04)
         df["COMIS_VAL"] = df["VALOR_REC_NUM"] * df["PERC_COMISSAO"]
-
+        
     return df, {
         "ok": True,
         "erro": None,
